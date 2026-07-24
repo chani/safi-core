@@ -95,27 +95,28 @@ final class ComponentManager
     }
 
     /**
-     * @param array<int, class-string<ServiceProviderInterface>> $providers
+     * Boots a collection of instantiated service provider instances.
+     *
+     * @param array<int, ServiceProviderInterface> $providers
      */
     public function bootProviders(array $providers): void
     {
         $cacheKey = 'safi.booted_providers';
         $bootedList = [];
 
-        foreach ($providers as $providerClass) {
+        foreach ($providers as $provider) {
             try {
-                /** @var ServiceProviderInterface $provider */
-                $provider = $this->container->get($providerClass);
-
                 if ($this->container instanceof ContainerRegistrarInterface) {
                     $provider->register($this->container);
                 }
 
                 $provider->boot($this->container);
+
+                $providerClass = $provider::class;
                 $this->loadedComponents[$providerClass] = $provider;
                 $bootedList[] = $providerClass;
             } catch (Throwable $e) {
-                $this->logger->error("Failed to boot service provider {$providerClass}: " . $e->getMessage());
+                $this->logger->error("Failed to boot service provider " . $provider::class . ": " . $e->getMessage());
             }
         }
 
