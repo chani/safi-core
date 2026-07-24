@@ -43,10 +43,18 @@ abstract class AbstractController
      */
     protected function render(string $template, array $data = []): Response
     {
+        return $this->html($this->view->render($template, $data));
+    }
+
+    /**
+     * @param array<string, string> $headers
+     */
+    protected function html(string $content, int $status = 200, array $headers = []): Response
+    {
         return new Response(
-            $this->view->render($template, $data),
-            200,
-            ['Content-Type' => 'text/html; charset=utf-8'],
+            $content,
+            $status,
+            array_merge(['Content-Type' => 'text/html; charset=utf-8'], $headers),
         );
     }
 
@@ -82,8 +90,18 @@ abstract class AbstractController
         return $model;
     }
 
-    protected function redirect(string $url): Response
+    /**
+     * Redirects to a URL with optional query parameters (µADR-038).
+     *
+     * @param array<string, string|int|float> $queryParams
+     */
+    protected function redirect(string $url, array $queryParams = []): Response
     {
+        if ($queryParams !== []) {
+            $separator = str_contains($url, '?') ? '&' : '?';
+            $url .= $separator . http_build_query($queryParams);
+        }
+
         return new Response('', 302, ['Location' => $url]);
     }
 }
