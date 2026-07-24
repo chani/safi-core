@@ -14,6 +14,8 @@ namespace Safi\Core;
 use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
 use Safi\Core\Contracts\RouterInterface;
+use Safi\Core\Contracts\ViewEngineInterface;
+use Safi\Core\Exception\ValidationException;
 use Safi\Core\Http\Context;
 use Safi\Core\Http\MiddlewareInterface;
 use Safi\Core\Http\MiddlewarePipeline;
@@ -23,7 +25,7 @@ use Throwable;
 
 final class Kernel
 {
-    public const string VERSION = '0.1.4';
+    public const string VERSION = '0.1.7';
 
     /** @var array<int, class-string<MiddlewareInterface>|callable|MiddlewareInterface> */
     private array $middlewares = [];
@@ -56,6 +58,18 @@ final class Kernel
             }
 
             return $pipeline->handle($context);
+        } catch (ValidationException $e) {
+            $this->logger->warning('Security / Validation boundary triggered: ' . $e->getMessage());
+
+            if ($request->isXhr()) {
+                return new Response(
+                    (string) json_encode(['error' => 'Forbidden', 'message' => $e->getMessage()]),
+                    403,
+                    ['Content-Type' => 'application/json'],
+                );
+            }
+
+            return $this->renderErrorResponse(403, '403 Forbidden', $e->getMessage());
         } catch (Throwable $e) {
             $this->logger->error('Unhandled kernel exception: ' . $e->getMessage(), [
                 'exception' => $e::class,
@@ -71,11 +85,37 @@ final class Kernel
                 );
             }
 
-            return new Response(
-                '<h1>500 Internal Server Error</h1><p>An unexpected error occurred.</p>',
-                500,
-                ['Content-Type' => 'text/html; charset=utf-8'],
-            );
+            return $this->renderErrorResponse(500, '500 Internal Server Error', 'An unexpected system exception occurred.');
         }
+    }
+
+    private function renderErrorResponse(int $code, string $title, string $message): Response
+    {
+        if ($this->container->has(ViewEngineInterface::class)) {
+            try {
+                /** @var ViewEngineInterface $view */
+                $view = $this->container->get(ViewEngineInterface::class);
+                $html = $view->render('errors/error.twig', [
+                    'code' => $code,
+                    'title' => $title,
+                    'message' => $message,
+                ]);
+
+                return new Response($html, $code, ['Content-Type' => 'text/html; charset=utf-8']);
+            } catch (Throwable) {
+                // Fallback to minimal response if view rendering fails
+            }
+        }
+
+        $fallback = sprintf(
+            '<!DOCTYPE html><html><head><meta charset="utf-8"><title>%d %s</title></head><body style="font-family:sans-serif;background:#1e1f22;color:#bcbec4;padding:3rem;text-align:center;"><h1 style="color:#ff6b7b;">%d %s</h1><p>%s</p></body></html>',
+            $code,
+            htmlspecialchars($title),
+            $code,
+            htmlspecialchars($title),
+            htmlspecialchars($message),
+        );
+
+        return new Response($fallback, $code, ['Content-Type' => 'text/html; charset=utf-8']);
     }
 }

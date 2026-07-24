@@ -97,7 +97,12 @@ final class Request
     public function isXhr(): bool
     {
         $header = $this->server['HTTP_X_REQUESTED_WITH'] ?? '';
-        return is_string($header) && strtolower($header) === 'xmlhttprequest';
+        $isXhr = is_string($header) && strtolower($header) === 'xmlhttprequest';
+
+        $htmx = $this->server['HTTP_HX_REQUEST'] ?? '';
+        $isHtmx = is_string($htmx) && strtolower($htmx) === 'true';
+
+        return $isXhr || $isHtmx;
     }
 
     public function getRawBody(): string
