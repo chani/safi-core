@@ -112,13 +112,13 @@ final class Assembler implements ContainerInterface, ContainerRegistrarInterface
         foreach ($parameters as $parameter) {
             $type = $parameter->getType();
 
-	    if ($type instanceof \ReflectionUnionType || $type instanceof \ReflectionIntersectionType) {
+            if ($type instanceof \ReflectionUnionType || $type instanceof \ReflectionIntersectionType) {
                 if ($parameter->isDefaultValueAvailable()) {
                     $dependencies[] = $parameter->getDefaultValue();
                     continue;
                 }
                 throw new RuntimeException("Union or Intersection types are not supported for autowiring parameter '{$parameter->getName()}' in class {$class}.");
-	    }
+            }
 
             if ($type instanceof ReflectionNamedType) {
                 $typeName = $type->getName();
