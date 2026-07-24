@@ -55,7 +55,10 @@ final class ComponentManager
             }
 
             $filePath = $file->getPathname();
-            if (str_contains($filePath, DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR)) {
+
+            // Ignore nested vendor directories relative to the target scan path
+            $relativePath = substr($filePath, strlen($directory));
+            if (str_contains($relativePath, DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR)) {
                 continue;
             }
 
@@ -143,7 +146,8 @@ final class ComponentManager
                 }
 
                 $filePath = $file->getPathname();
-                if (str_contains($filePath, DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR)) {
+                $relativePath = substr($filePath, strlen($compDir));
+                if (str_contains($relativePath, DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR)) {
                     continue;
                 }
 
