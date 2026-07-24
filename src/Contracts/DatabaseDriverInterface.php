@@ -37,6 +37,26 @@ interface DatabaseDriverInterface
     public function loadModel(string $modelClass, int $id): ModelInterface;
 
     /**
+     * Finds domain models matching criteria.
+     *
+     * @template T of ModelInterface
+     * @param class-string<T> $modelClass
+     * @param array<int|string, mixed> $bindings
+     * @return array<int, T>
+     */
+    public function findModels(string $modelClass, string $criteria = '', array $bindings = []): array;
+
+    /**
+     * Finds a single domain model matching criteria.
+     *
+     * @template T of ModelInterface
+     * @param class-string<T> $modelClass
+     * @param array<int|string, mixed> $bindings
+     * @return T|null
+     */
+    public function findOneModel(string $modelClass, string $criteria = '', array $bindings = []): ?ModelInterface;
+
+    /**
      * Stores and persists a domain model state.
      */
     public function storeModel(ModelInterface $model): int;
@@ -49,7 +69,7 @@ interface DatabaseDriverInterface
     /**
      * Executes a raw parameterized query returning array records.
      *
-     * @param array<int, mixed> $bindings
+     * @param array<int|string, mixed> $bindings
      * @return array<int, array<string, mixed>>
      */
     public function query(string $sql, array $bindings = []): array;
@@ -57,7 +77,7 @@ interface DatabaseDriverInterface
     /**
      * Executes an un-buffered SQL statement (INSERT/UPDATE/DELETE/DDL).
      *
-     * @param array<int, mixed> $bindings
+     * @param array<int|string, mixed> $bindings
      */
     public function exec(string $sql, array $bindings = []): int;
 }
