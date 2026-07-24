@@ -62,6 +62,16 @@ interface DatabaseDriverInterface
     public function storeModel(ModelInterface $model): int;
 
     /**
+     * Executes an closure block within an isolated database transaction boundary.
+     * Guarantees ACID compliance by committing on success or rolling back on Throwable.
+     *
+     * @template T
+     * @param callable(DatabaseDriverInterface): T $callback
+     * @return T
+     */
+    public function transaction(callable $callback): mixed;
+
+    /**
      * Removes a model record permanently from storage.
      */
     public function trashModel(ModelInterface $model): void;
