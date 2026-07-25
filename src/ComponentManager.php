@@ -23,6 +23,7 @@ use Safi\Core\Attributes\Route;
 use Safi\Core\Contracts\ContainerRegistrarInterface;
 use Safi\Core\Contracts\RouterInterface;
 use Safi\Core\Contracts\ServiceProviderInterface;
+use Safi\Core\Contracts\ViewEngineInterface;
 use Safi\Core\Exception\AmbiguousInterfaceException;
 use Safi\Core\Util\ClassFinder;
 use SplFileInfo;
@@ -38,6 +39,31 @@ final class ComponentManager
         private readonly CacheInterface $cache,
         private readonly LoggerInterface $logger,
     ) {}
+
+    public function registerComponentViews(ViewEngineInterface $viewEngine, string $directory): void
+    {
+        if (!is_dir($directory)) {
+            return;
+        }
+
+        $dirs = scandir($directory);
+        if (!is_array($dirs)) {
+            return;
+        }
+
+        foreach ($dirs as $dir) {
+            if ($dir === '.') {
+                continue;
+            }
+            if ($dir === '..') {
+                continue;
+            }
+            $viewsPath = $directory . '/' . $dir . '/Views';
+            if (is_dir($viewsPath)) {
+                $viewEngine->registerNamespace($dir, $viewsPath);
+            }
+        }
+    }
 
     public function registerAttributeRoutes(RouterInterface $router, string $directory): void
     {
@@ -56,7 +82,6 @@ final class ComponentManager
 
             $filePath = $file->getPathname();
 
-            // Ignore nested vendor directories relative to the target scan path
             $relativePath = substr($filePath, strlen($directory));
             if (str_contains($relativePath, DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR)) {
                 continue;
@@ -95,8 +120,6 @@ final class ComponentManager
     }
 
     /**
-     * Boots a collection of instantiated service provider instances.
-     *
      * @param array<int, ServiceProviderInterface> $providers
      */
     public function bootProviders(array $providers): void
