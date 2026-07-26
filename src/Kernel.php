@@ -42,6 +42,16 @@ final class Kernel
         $this->middlewares = $middlewares;
     }
 
+    /**
+     * Returns the list of active pipeline middlewares registered at runtime.
+     *
+     * @return array<int, class-string<MiddlewareInterface>|callable|MiddlewareInterface>
+     */
+    public function getMiddlewares(): array
+    {
+        return $this->middlewares;
+    }
+
     public function handle(Request $request): Response
     {
         $response = new Response();

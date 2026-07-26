@@ -53,8 +53,11 @@ final class SecurityService
             return;
         }
 
-        $proto = $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? null;
-        if (is_string($proto) && strtolower($proto) === 'https') {
+        $rawProto = $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? null;
+        $proto = is_string($rawProto) ? strtolower($rawProto) : '';
+        $isHttps = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || $proto === 'https';
+
+        if ($isHttps) {
             $_SERVER['HTTPS'] = 'on';
             ini_set('session.cookie_secure', '1');
         }
@@ -72,7 +75,7 @@ final class SecurityService
                 'lifetime' => 0,
                 'path' => '/',
                 'domain' => '',
-                'secure' => true,
+                'secure' => $isHttps,
                 'httponly' => true,
                 'samesite' => 'Lax',
             ]);
@@ -129,9 +132,6 @@ final class SecurityService
         return $default;
     }
 
-    /**
-     * Checks if an IP matches a CIDR range (IPv4 & IPv6 Dual-Stack supported).
-     */
     private function checkIpInCidr(string $ip, string $cidr): bool
     {
         if (!str_contains($cidr, '/')) {

@@ -13,7 +13,6 @@ namespace Safi\Core;
 
 use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
-use Psr\SimpleCache\CacheInterface;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use ReflectionClass;
@@ -36,7 +35,6 @@ final class ComponentManager
 
     public function __construct(
         private readonly ContainerInterface $container,
-        private readonly CacheInterface $cache,
         private readonly LoggerInterface $logger,
     ) {}
 
@@ -124,9 +122,6 @@ final class ComponentManager
      */
     public function bootProviders(array $providers): void
     {
-        $cacheKey = 'safi.booted_providers';
-        $bootedList = [];
-
         foreach ($providers as $provider) {
             try {
                 if ($this->container instanceof ContainerRegistrarInterface) {
@@ -137,13 +132,10 @@ final class ComponentManager
 
                 $providerClass = $provider::class;
                 $this->loadedComponents[$providerClass] = $provider;
-                $bootedList[] = $providerClass;
             } catch (Throwable $e) {
                 $this->logger->error("Failed to boot service provider " . $provider::class . ": " . $e->getMessage());
             }
         }
-
-        $this->cache->set($cacheKey, $bootedList, 3600);
     }
 
     /**
@@ -209,10 +201,5 @@ final class ComponentManager
     public function getLoadedComponents(): array
     {
         return $this->loadedComponents;
-    }
-
-    public function clearProviderCache(): void
-    {
-        $this->cache->delete('safi.booted_providers');
     }
 }

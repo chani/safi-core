@@ -16,7 +16,7 @@ Core package for the Safi Microframework (PHP 8.5+). Built around pure construct
 
 ### 3. Attribute Routing (`#[Route]`)
 * Routes are defined via PHP attributes directly on controller methods.
-* **Default Lockdown:** All endpoints require authentication (`401 Unauthorized`) unless explicitly configured as `public: true`.
+* Unauthenticated requests are redirected or rejected by authentication middleware configured in the pipeline.
 
 ---
 

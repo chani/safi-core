@@ -13,6 +13,7 @@ namespace Safi\Core\Services;
 
 use Psr\Log\LoggerInterface;
 use Safi\Core\Contracts\DatabaseDriverInterface;
+use Safi\Core\Models\Job;
 
 final readonly class JobQueueService
 {
@@ -24,15 +25,18 @@ final readonly class JobQueueService
     /**
      * @param array<string, mixed> $payload
      */
-    public function push(string $handlerClass, array $payload = []): void
+    public function push(string $handlerClass, array$payload = []): void
     {
-        $jsonPayload = json_encode($payload, JSON_THROW_ON_ERROR);
-        $createdAt = date('Y-m-d H:i:s');
+        $job = $this->db->dispenseModel(Job::class);
+        if ($job instanceof Job) {
+            $job->handler = $handlerClass;
+            $job->payload = json_encode($payload, JSON_THROW_ON_ERROR);
+            $job->status = 'pending';
+            $job->attempts = 0;
+            $job->createdAt = date('Y-m-d H:i:s');
 
-        $this->db->exec(
-            "INSERT INTO job (handler, payload, status, attempts, created_at) VALUES (?, ?, 'pending', 0, ?)",
-            [$handlerClass, $jsonPayload, $createdAt],
-        );
+            $this->db->storeModel($job);
+        }
 
         $this->logger->info("Enqueued job handler: {$handlerClass}");
     }
@@ -42,42 +46,44 @@ final readonly class JobQueueService
      */
     public function pop(): ?array
     {
-        $rows = $this->db->query(
-            "SELECT id, handler, payload, attempts FROM job WHERE status = 'pending' OR (status = 'failed' AND attempts < 3) ORDER BY id ASC LIMIT 1",
-        );
+        return $this->db->transaction(function (DatabaseDriverInterface$db): ?array {
+            /** @var list<Job> $jobs */
+            $jobs = $db->findModels(Job::class, "(status = 'pending' OR (status = 'failed' AND attempts < 3)) ORDER BY id ASC LIMIT 1");
 
-        if ($rows === []) {
-            return null;
-        }
+            if ($jobs === []) {
+                return null;
+            }
 
-        $job = $rows[0];
-        $rawId = $job['id'] ?? 0;
-        $rawAttempts = $job['attempts'] ?? 0;
+            $job = $jobs[0];
+            $nextAttempts = $job->attempts + 1;
 
-        $id = is_numeric($rawId) ? (int) $rawId : 0;
-        $nextAttempts = (is_numeric($rawAttempts) ? (int) $rawAttempts : 0) + 1;
+            $job->attempts = $nextAttempts;
+            $job->status = 'processing';
+            $db->storeModel($job);
 
-        $this->db->exec(
-            "UPDATE job SET status = 'processing', attempts = ? WHERE id = ?",
-            [$nextAttempts, $id],
-        );
-
-        return [
-            'id' => $id,
-            'handler' => is_string($job['handler'] ?? null) ? $job['handler'] : '',
-            'payload' => is_string($job['payload'] ?? null) ? $job['payload'] : '',
-            'attempts' => $nextAttempts,
-        ];
+            return [
+                'id' => $job->getId(),
+                'handler' => $job->handler,
+                'payload' => $job->payload,
+                'attempts' => $nextAttempts,
+            ];
+        });
     }
 
     public function complete(int $id): void
     {
-        $this->db->exec("DELETE FROM job WHERE id = ?", [$id]);
+        $job = $this->db->loadModel(Job::class, $id);
+        if ($job->getId() > 0) {
+            $this->db->trashModel($job);
+        }
     }
 
-    public function fail(int $id, int $attempts): void
+    public function fail(int $id, int$attempts): void
     {
-        $status = ($attempts >= 3) ? 'buried' : 'failed';
-        $this->db->exec("UPDATE job SET status = ? WHERE id = ?", [$status, $id]);
+        $job = $this->db->loadModel(Job::class, $id);
+        if ($job->getId() > 0) {
+            $job->status = ($attempts >= 3) ? 'buried' : 'failed';
+            $this->db->storeModel($job);
+        }
     }
 }

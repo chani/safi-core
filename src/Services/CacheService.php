@@ -21,9 +21,6 @@ final class CacheService implements CacheInterface
     private readonly bool $isApcuAvailable;
     private readonly string $storageDir;
 
-    /** @var array<string, mixed> */
-    private array $inMemoryCache = [];
-
     public function __construct(
         private readonly ?LoggerInterface $logger = null,
         ?string $storageDir = null,
@@ -39,15 +36,10 @@ final class CacheService implements CacheInterface
     #[\Override]
     public function get(string $key, mixed $default = null): mixed
     {
-        if (array_key_exists($key, $this->inMemoryCache)) {
-            return $this->inMemoryCache[$key];
-        }
-
         if ($this->isApcuAvailable) {
             $success = false;
             $value = apcu_fetch($key, $success);
             if ($success) {
-                $this->inMemoryCache[$key] = $value;
                 return $value;
             }
             $this->logger?->debug("Cache miss for key: {$key}");
@@ -77,14 +69,12 @@ final class CacheService implements CacheInterface
             return $default;
         }
 
-        $this->inMemoryCache[$key] = $decoded['value'];
         return $decoded['value'];
     }
 
     #[\Override]
-    public function set(string $key, mixed $value, null | int | DateInterval $ttl = null): bool
+    public function set(string $key, mixed $value, null|int|DateInterval $ttl = null): bool
     {
-        $this->inMemoryCache[$key] = $value;
         $seconds = $this->ttlToSeconds($ttl);
 
         if ($this->isApcuAvailable) {
@@ -109,8 +99,6 @@ final class CacheService implements CacheInterface
     #[\Override]
     public function delete(string $key): bool
     {
-        unset($this->inMemoryCache[$key]);
-
         if ($this->isApcuAvailable) {
             return apcu_delete($key);
         }
@@ -126,8 +114,6 @@ final class CacheService implements CacheInterface
     #[\Override]
     public function clear(): bool
     {
-        $this->inMemoryCache = [];
-
         if ($this->isApcuAvailable) {
             return apcu_clear_cache();
         }
@@ -165,7 +151,7 @@ final class CacheService implements CacheInterface
      * @param iterable<mixed, mixed> $values
      */
     #[\Override]
-    public function setMultiple(iterable $values, null | int | DateInterval $ttl = null): bool
+    public function setMultiple(iterable $values, null|int|DateInterval $ttl = null): bool
     {
         $success = true;
         foreach ($values as $key => $value) {
@@ -217,7 +203,7 @@ final class CacheService implements CacheInterface
         return $this->storageDir . '/' . $hash . '.json';
     }
 
-    private function ttlToSeconds(null | int | DateInterval $ttl): int
+    private function ttlToSeconds(null|int|DateInterval $ttl): int
     {
         if (null === $ttl) {
             return 0;

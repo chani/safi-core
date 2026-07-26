@@ -38,7 +38,7 @@ final class Assembler implements ContainerInterface, ContainerRegistrarInterface
     }
 
     #[\Override]
-    public function set(string $id, callable | object $factory): void
+    public function set(string $id, callable|object $factory): void
     {
         $this->services[$id] = $factory;
     }
@@ -50,13 +50,13 @@ final class Assembler implements ContainerInterface, ContainerRegistrarInterface
             return $this->instances[$id];
         }
 
-        if (interface_exists($id) && !$this->has($id) && isset($this->interfaceMap[$id])) {
+        if (interface_exists($id) && !$this->hasService($id) && isset($this->interfaceMap[$id])) {
             $concrete = $this->interfaceMap[$id];
             $this->logger->info("Interface mapping resolved: {$id} -> {$concrete}");
             $id = $concrete;
         }
 
-        if (!$this->has($id)) {
+        if (!$this->hasService($id)) {
             if (class_exists($id)) {
                 return $this->autowire($id);
             }
@@ -80,6 +80,24 @@ final class Assembler implements ContainerInterface, ContainerRegistrarInterface
 
     #[\Override]
     public function has(string $id): bool
+    {
+        if (isset($this->services[$id]) || isset($this->instances[$id]) || isset($this->interfaceMap[$id])) {
+            return true;
+        }
+
+        if (class_exists($id)) {
+            try {
+                $ref = new ReflectionClass($id);
+                return $ref->isInstantiable();
+            } catch (\Throwable) {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    private function hasService(string $id): bool
     {
         return isset($this->services[$id]);
     }
@@ -131,7 +149,7 @@ final class Assembler implements ContainerInterface, ContainerRegistrarInterface
                     throw new RuntimeException("Cannot autowire built-in type '{$typeName}' for parameter '{$parameter->getName()}' in class {$class}.");
                 }
 
-                if (interface_exists($typeName) && !$this->has($typeName) && isset($this->interfaceMap[$typeName])) {
+                if (interface_exists($typeName) && !$this->hasService($typeName) && isset($this->interfaceMap[$typeName])) {
                     $typeName = $this->interfaceMap[$typeName];
                 }
 

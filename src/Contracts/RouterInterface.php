@@ -22,7 +22,7 @@ interface RouterInterface
      * @param array<int|string, mixed>|callable|string $handler
      * @param array<string, mixed> $options
      */
-    public function addRoute(string $method, string $path, mixed $handler, ?string $name = null, array $options = []): void;
+    public function addRoute(string $method, string $path, mixed$handler, ?string $name = null, array$options = []): void;
 
     /**
      * Dispatches an incoming HTTP request through the router execution chain.
@@ -34,5 +34,12 @@ interface RouterInterface
      *
      * @param array<string, mixed> $params
      */
-    public function generateUrl(string $name, array $params = []): string;
+    public function generateUrl(string $name, array$params = []): string;
+
+    /**
+     * Returns all currently registered route definitions for introspection.
+     *
+     * @return array<int, array{method: string, path: string, handler: mixed, name: string|null, options: array<string, mixed>}>
+     */
+    public function getRoutes(): array;
 }
