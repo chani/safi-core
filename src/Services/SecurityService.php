@@ -47,56 +47,25 @@ final class SecurityService
         return hash('sha256', $this->getClientIp());
     }
 
-    public function secureSessionStart(): void
-    {
-        if (PHP_SAPI === 'cli') {
-            return;
-        }
-
-        $rawProto = $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? null;
-        $proto = is_string($rawProto) ? strtolower($rawProto) : '';
-        $isHttps = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || $proto === 'https';
-
-        if ($isHttps) {
-            $_SERVER['HTTPS'] = 'on';
-            ini_set('session.cookie_secure', '1');
-        }
-
-        /** @var array<string, string> $headers */
-        $headers = is_array($this->config['headers'] ?? null) ? $this->config['headers'] : [];
-        foreach ($headers as $name => $value) {
-            header("{$name}: {$value}");
-        }
-
-        if (session_status() === PHP_SESSION_NONE) {
-            $sessionName = is_string($this->config['sessid'] ?? null) ? $this->config['sessid'] : 'SAFI_SESSID';
-            session_name($sessionName);
-            session_set_cookie_params([
-                'lifetime' => 0,
-                'path' => '/',
-                'domain' => '',
-                'secure' => $isHttps,
-                'httponly' => true,
-                'samesite' => 'Lax',
-            ]);
-            session_start();
-            $this->logger->info("Security session initialized: {$sessionName}");
-        }
-
-        if (!isset($_SESSION['csrf_token']) || !is_string($_SESSION['csrf_token'])) {
-            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-        }
-
-        $this->csrfToken = $_SESSION['csrf_token'];
-    }
-
     public function getCsrfToken(): string
     {
-        if ($this->csrfToken === '') {
-            $this->csrfToken = bin2hex(random_bytes(32));
+        if ($this->csrfToken !== '') {
+            return $this->csrfToken;
         }
 
-        return $this->csrfToken;
+        if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['csrf_token']) && is_string($_SESSION['csrf_token'])) {
+            $this->csrfToken = $_SESSION['csrf_token'];
+            return $this->csrfToken;
+        }
+
+        $token = bin2hex(random_bytes(32));
+        $this->csrfToken = $token;
+
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            $_SESSION['csrf_token'] = $token;
+        }
+
+        return $token;
     }
 
     public function validateCsrfToken(?string $token): bool
@@ -107,7 +76,7 @@ final class SecurityService
 
         $isValid = hash_equals($this->getCsrfToken(), $token);
         if (!$isValid) {
-            $this->logger->warning("CSRF token validation failed.");
+            $this->logger->warning('CSRF token validation failed.');
         }
 
         return $isValid;

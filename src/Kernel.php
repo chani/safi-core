@@ -43,8 +43,6 @@ final class Kernel
     }
 
     /**
-     * Returns the list of active pipeline middlewares registered at runtime.
-     *
      * @return array<int, class-string<MiddlewareInterface>|callable|MiddlewareInterface>
      */
     public function getMiddlewares(): array
@@ -54,10 +52,14 @@ final class Kernel
 
     public function handle(Request $request): Response
     {
+        // Phase 1: Route Matching before Pipeline execution
+        $request = $this->router->match($request);
+
         $response = new Response();
         $context = new Context($request, $response, $this->logger);
 
         try {
+            // Phase 2: Middleware Pipeline -> Terminal Dispatcher
             $pipeline = new MiddlewarePipeline(
                 $this->container,
                 fn(Context $ctx): Response => $this->router->dispatch($ctx->request),
@@ -113,7 +115,7 @@ final class Kernel
 
                 return new Response($html, $code, ['Content-Type' => 'text/html; charset=utf-8']);
             } catch (Throwable) {
-                // Fallback to minimal response if view rendering fails
+                // Fallback
             }
         }
 

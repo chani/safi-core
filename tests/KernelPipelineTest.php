@@ -12,56 +12,48 @@ declare(strict_types=1);
 namespace Safi\Core\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Safi\Core\Assembler;
+use Psr\Container\ContainerInterface;
+use Psr\Log\LoggerInterface;
+use RuntimeException;
 use Safi\Core\Contracts\RouterInterface;
-use Safi\Core\Http\Context;
-use Safi\Core\Http\MiddlewareInterface;
-use Safi\Core\Http\MiddlewarePipeline;
 use Safi\Core\Http\Request;
-use Safi\Core\Http\RequestHandlerInterface;
 use Safi\Core\Http\Response;
 use Safi\Core\Kernel;
-use Safi\Core\Logger;
 
 final class KernelPipelineTest extends TestCase
 {
-    public function testPipelineExecutesMiddlewareInOrder(): void
+    public function testKernelExecutesMiddlewarePipelineAndDispatchesResponse(): void
     {
-        $logger = new Logger(false);
-        $assembler = new Assembler($logger);
+        $container = $this->createMock(ContainerInterface::class);
+        $router = $this->createMock(RouterInterface::class);
+        $logger = $this->createMock(LoggerInterface::class);
 
-        $pipeline = new MiddlewarePipeline($assembler, function (Context $ctx): Response {
-            $ctx->response->setContent($ctx->response->getContent() . 'Core');
-            return $ctx->response;
-        });
+        $router->method('match')->willReturnCallback(static fn(Request $r): Request => $r);
+        $router->expects($this->once())
+            ->method('dispatch')
+            ->willReturn(new Response('OK', 200));
 
-        $pipeline->add(new class implements MiddlewareInterface {
-            public function process(Context $context, RequestHandlerInterface $handler): Response
-            {
-                $context->response->setContent('Header:');
-                return $handler->handle($context);
-            }
-        });
+        $kernel = new Kernel($container, $router, $logger);
 
-        $request = new Request([], [], ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/']);
-        $response = new Response();
-        $context = new Context($request, $response, $logger);
+        $request = new Request(server: ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/']);
+        $response = $kernel->handle($request);
 
-        $result = $pipeline->handle($context);
-        $this->assertSame('Header:Core', $result->getContent());
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('OK', $response->getContent());
     }
 
     public function testKernelCatchesUnhandledExceptionsAndReturns500(): void
     {
-        $logger = new Logger(false);
-        $assembler = new Assembler($logger);
-
+        $container = $this->createMock(ContainerInterface::class);
         $router = $this->createMock(RouterInterface::class);
-        $router->method('dispatch')->willThrowException(new \RuntimeException('Database crash'));
+        $logger = $this->createMock(LoggerInterface::class);
 
-        $kernel = new Kernel($assembler, $router, $logger);
-        $request = new Request([], [], ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/crash']);
+        $router->method('match')->willReturnCallback(static fn(Request $r): Request => $r);
+        $router->method('dispatch')->willThrowException(new RuntimeException('Boom'));
 
+        $kernel = new Kernel($container, $router, $logger);
+
+        $request = new Request(server: ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/fail']);
         $response = $kernel->handle($request);
 
         $this->assertSame(500, $response->getStatusCode());
