@@ -15,6 +15,8 @@ use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
 use Safi\Core\Contracts\RouterInterface;
 use Safi\Core\Contracts\ViewEngineInterface;
+use Safi\Core\Exception\ForbiddenException;
+use Safi\Core\Exception\NotFoundException;
 use Safi\Core\Exception\ValidationException;
 use Safi\Core\Http\Context;
 use Safi\Core\Http\MiddlewareInterface;
@@ -25,10 +27,10 @@ use Throwable;
 
 final class Kernel
 {
-    public const string VERSION = '0.1.12';
+    public const string VERSION = '0.1.13';
 
     /** @var array<int, class-string<MiddlewareInterface>|callable|MiddlewareInterface> */
-    private array $middlewares = [];
+    private array $middlewares;
 
     /**
      * @param array<int, class-string<MiddlewareInterface>|callable|MiddlewareInterface> $middlewares
@@ -58,8 +60,8 @@ final class Kernel
         $response = new Response();
         $context = new Context($request, $response, $this->logger);
 
+
         try {
-            // Phase 2: Middleware Pipeline -> Terminal Dispatcher
             $pipeline = new MiddlewarePipeline(
                 $this->container,
                 fn(Context $ctx): Response => $this->router->dispatch($ctx->request),
@@ -70,8 +72,20 @@ final class Kernel
             }
 
             return $pipeline->handle($context);
-        } catch (ValidationException $e) {
-            $this->logger->warning('Security / Validation boundary triggered: ' . $e->getMessage());
+        } catch (NotFoundException $e) {
+            $this->logger->warning('Resource not found: ' . $e->getMessage());
+
+            if ($request->isXhr()) {
+                return new Response(
+                    (string) json_encode(['error' => 'Not Found', 'message' => $e->getMessage()]),
+                    404,
+                    ['Content-Type' => 'application/json'],
+                );
+            }
+
+            return $this->renderErrorResponse(404, '404 Not Found', $e->getMessage());
+        } catch (ForbiddenException $e) {
+            $this->logger->warning('Access forbidden: ' . $e->getMessage());
 
             if ($request->isXhr()) {
                 return new Response(
@@ -82,6 +96,18 @@ final class Kernel
             }
 
             return $this->renderErrorResponse(403, '403 Forbidden', $e->getMessage());
+        } catch (ValidationException $e) {
+            $this->logger->warning('Validation failure boundary: ' . $e->getMessage());
+
+            if ($request->isXhr()) {
+                return new Response(
+                    (string) json_encode(['error' => 'Bad Request', 'message' => $e->getMessage()]),
+                    400,
+                    ['Content-Type' => 'application/json'],
+                );
+            }
+
+            return $this->renderErrorResponse(400, '400 Bad Request', $e->getMessage());
         } catch (Throwable $e) {
             $this->logger->error('Unhandled kernel exception: ' . $e->getMessage(), [
                 'exception' => $e::class,

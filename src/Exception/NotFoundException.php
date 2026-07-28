@@ -13,4 +13,4 @@ namespace Safi\Core\Exception;
 
 use RuntimeException;
 
-final class ForbiddenException extends RuntimeException {}
+final class NotFoundException extends RuntimeException {}
