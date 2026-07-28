@@ -45,7 +45,6 @@
             "url": "../wajha-router"
         }
     ],
-    "version": "0.1.11",
     "minimum-stability": "dev",
     "prefer-stable": true
 }

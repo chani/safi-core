@@ -27,7 +27,7 @@ use Throwable;
 
 final class Kernel
 {
-    public const string VERSION = '0.1.13';
+    public const string VERSION = '0.1.14';
 
     /** @var array<int, class-string<MiddlewareInterface>|callable|MiddlewareInterface> */
     private array $middlewares;
