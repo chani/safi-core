@@ -27,7 +27,7 @@ use Throwable;
 
 final class Kernel
 {
-    public const string VERSION = '0.1.14';
+    public const string VERSION = '0.1.15';
 
     /** @var array<int, class-string<MiddlewareInterface>|callable|MiddlewareInterface> */
     private array $middlewares;
@@ -54,12 +54,10 @@ final class Kernel
 
     public function handle(Request $request): Response
     {
-        // Phase 1: Route Matching before Pipeline execution
         $request = $this->router->match($request);
 
         $response = new Response();
         $context = new Context($request, $response, $this->logger);
-
 
         try {
             $pipeline = new MiddlewarePipeline(
@@ -74,66 +72,41 @@ final class Kernel
             return $pipeline->handle($context);
         } catch (NotFoundException $e) {
             $this->logger->warning('Resource not found: ' . $e->getMessage());
-
-            if ($request->isXhr()) {
-                return new Response(
-                    (string) json_encode(['error' => 'Not Found', 'message' => $e->getMessage()]),
-                    404,
-                    ['Content-Type' => 'application/json'],
-                );
-            }
-
-            return $this->renderErrorResponse(404, '404 Not Found', $e->getMessage());
+            return $this->buildErrorResponse($request, 404, '404 Not Found', $e->getMessage());
         } catch (ForbiddenException $e) {
             $this->logger->warning('Access forbidden: ' . $e->getMessage());
-
-            if ($request->isXhr()) {
-                return new Response(
-                    (string) json_encode(['error' => 'Forbidden', 'message' => $e->getMessage()]),
-                    403,
-                    ['Content-Type' => 'application/json'],
-                );
-            }
-
-            return $this->renderErrorResponse(403, '403 Forbidden', $e->getMessage());
+            return $this->buildErrorResponse($request, 403, '403 Forbidden', $e->getMessage());
         } catch (ValidationException $e) {
             $this->logger->warning('Validation failure boundary: ' . $e->getMessage());
-
-            if ($request->isXhr()) {
-                return new Response(
-                    (string) json_encode(['error' => 'Bad Request', 'message' => $e->getMessage()]),
-                    400,
-                    ['Content-Type' => 'application/json'],
-                );
-            }
-
-            return $this->renderErrorResponse(400, '400 Bad Request', $e->getMessage());
+            return $this->buildErrorResponse($request, 400, '400 Bad Request', $e->getMessage());
         } catch (Throwable $e) {
             $this->logger->error('Unhandled kernel exception: ' . $e->getMessage(), [
                 'exception' => $e::class,
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
             ]);
-
-            if ($request->isXhr()) {
-                return new Response(
-                    (string) json_encode(['error' => 'Internal Server Error']),
-                    500,
-                    ['Content-Type' => 'application/json'],
-                );
-            }
-
-            return $this->renderErrorResponse(500, '500 Internal Server Error', 'An unexpected system exception occurred.');
+            return $this->buildErrorResponse($request, 500, '500 Internal Server Error', $e->getMessage());
         }
     }
 
-    private function renderErrorResponse(int $code, string $title, string $message): Response
+    private function buildErrorResponse(Request $request, int $code, string $title, string $message): Response
     {
+        if ($request->isXhr()) {
+            return new Response(
+                (string) json_encode(['error' => $title, 'message' => $message]),
+                $code,
+                ['Content-Type' => 'application/json'],
+            );
+        }
+
+        $isAdmin = str_starts_with($request->getUri(), '/admin');
+
         if ($this->container->has(ViewEngineInterface::class)) {
             try {
                 /** @var ViewEngineInterface $view */
                 $view = $this->container->get(ViewEngineInterface::class);
-                $html = $view->render('errors/error.twig', [
+                $template = $isAdmin ? 'errors/admin_error.twig' : 'errors/error.twig';
+                $html = $view->render($template, [
                     'code' => $code,
                     'title' => $title,
                     'message' => $message,
@@ -145,15 +118,6 @@ final class Kernel
             }
         }
 
-        $fallback = sprintf(
-            '<!DOCTYPE html><html><head><meta charset="utf-8"><title>%d %s</title></head><body style="font-family:sans-serif;background:#1e1f22;color:#bcbec4;padding:3rem;text-align:center;"><h1 style="color:#ff6b7b;">%d %s</h1><p>%s</p></body></html>',
-            $code,
-            htmlspecialchars($title),
-            $code,
-            htmlspecialchars($title),
-            htmlspecialchars($message),
-        );
-
-        return new Response($fallback, $code, ['Content-Type' => 'text/html; charset=utf-8']);
+        return new Response("<h1>{$code} {$title}</h1><p>{$message}</p>", $code, ['Content-Type' => 'text/html; charset=utf-8']);
     }
 }
