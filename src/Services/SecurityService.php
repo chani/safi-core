@@ -53,17 +53,18 @@ final class SecurityService
             return $this->csrfToken;
         }
 
-        if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['csrf_token']) && is_string($_SESSION['csrf_token'])) {
+        if (session_status() !== PHP_SESSION_ACTIVE && session_status() !== PHP_SESSION_DISABLED) {
+            @session_start();
+        }
+
+        if (isset($_SESSION['csrf_token']) && is_string($_SESSION['csrf_token']) && $_SESSION['csrf_token'] !== '') {
             $this->csrfToken = $_SESSION['csrf_token'];
             return $this->csrfToken;
         }
 
         $token = bin2hex(random_bytes(32));
         $this->csrfToken = $token;
-
-        if (session_status() === PHP_SESSION_ACTIVE) {
-            $_SESSION['csrf_token'] = $token;
-        }
+        $_SESSION['csrf_token'] = $token;
 
         return $token;
     }
