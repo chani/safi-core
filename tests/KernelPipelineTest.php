@@ -12,7 +12,6 @@ declare(strict_types=1);
 namespace Safi\Core\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
 use RuntimeException;
 use Safi\Core\Contracts\RouterInterface;
@@ -24,7 +23,6 @@ final class KernelPipelineTest extends TestCase
 {
     public function testKernelExecutesMiddlewarePipelineAndDispatchesResponse(): void
     {
-        $container = $this->createMock(ContainerInterface::class);
         $router = $this->createMock(RouterInterface::class);
         $logger = $this->createMock(LoggerInterface::class);
 
@@ -33,7 +31,7 @@ final class KernelPipelineTest extends TestCase
             ->method('dispatch')
             ->willReturn(new Response('OK', 200));
 
-        $kernel = new Kernel($container, $router, $logger);
+        $kernel = new Kernel($router, $logger);
 
         $request = new Request(server: ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/']);
         $response = $kernel->handle($request);
@@ -44,14 +42,13 @@ final class KernelPipelineTest extends TestCase
 
     public function testKernelCatchesUnhandledExceptionsAndReturns500(): void
     {
-        $container = $this->createMock(ContainerInterface::class);
         $router = $this->createMock(RouterInterface::class);
         $logger = $this->createMock(LoggerInterface::class);
 
         $router->method('match')->willReturnCallback(static fn(Request $r): Request => $r);
         $router->method('dispatch')->willThrowException(new RuntimeException('Boom'));
 
-        $kernel = new Kernel($container, $router, $logger);
+        $kernel = new Kernel($router, $logger);
 
         $request = new Request(server: ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/fail']);
         $response = $kernel->handle($request);

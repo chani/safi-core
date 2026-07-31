@@ -11,12 +11,11 @@ declare(strict_types=1);
 
 namespace Safi\Core\Http;
 
-use Psr\Container\ContainerInterface;
 use RuntimeException;
 
 final class MiddlewarePipeline implements RequestHandlerInterface
 {
-    /** @var array<int, string|callable|MiddlewareInterface> */
+    /** @var array<int, callable|MiddlewareInterface> */
     private array $middlewares = [];
     private int $index = 0;
 
@@ -26,14 +25,12 @@ final class MiddlewarePipeline implements RequestHandlerInterface
     /**
      * @param callable(Context): Response $fallbackHandler
      */
-    public function __construct(
-        private readonly ContainerInterface $container,
-        callable $fallbackHandler,
-    ) {
+    public function __construct(callable $fallbackHandler)
+    {
         $this->fallbackHandler = $fallbackHandler;
     }
 
-    public function add(string | callable | MiddlewareInterface $middleware): self
+    public function add(callable | MiddlewareInterface $middleware): self
     {
         $this->middlewares[] = $middleware;
         return $this;
@@ -48,11 +45,6 @@ final class MiddlewarePipeline implements RequestHandlerInterface
 
         $middleware = $this->middlewares[$this->index];
         $this->index++;
-
-        if (is_string($middleware)) {
-            /** @var MiddlewareInterface $middleware */
-            $middleware = $this->container->get($middleware);
-        }
 
         if ($middleware instanceof MiddlewareInterface) {
             $response = $middleware->process($context, $this);

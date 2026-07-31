@@ -11,32 +11,23 @@ declare(strict_types=1);
 
 namespace Safi\Core\Event;
 
-use Psr\Container\ContainerInterface;
-
 final class EventDispatcher
 {
-    /** @var array<string, list<class-string>> */
+    /** @var array<string, list<callable>> */
     private array $listeners = [];
-
-    public function __construct(private readonly ContainerInterface $container) {}
 
     /**
      * @param class-string $eventClass
-     * @param class-string $listenerClass
      */
-    public function addListener(string $eventClass, string $listenerClass): void
+    public function addListener(string $eventClass, callable $listener): void
     {
-        $this->listeners[$eventClass][] = $listenerClass;
+        $this->listeners[$eventClass][] = $listener;
     }
 
     public function dispatch(object $event): object
     {
-        foreach ($this->listeners[$event::class] ?? [] as $listenerClass) {
-            /** @var object $listener */
-            $listener = $this->container->get($listenerClass);
-            if (method_exists($listener, 'handle')) {
-                $listener->handle($event);
-            }
+        foreach ($this->listeners[$event::class] ?? [] as $listener) {
+            $listener($event);
         }
 
         return $event;

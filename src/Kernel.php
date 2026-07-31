@@ -11,7 +11,6 @@ declare(strict_types=1);
 
 namespace Safi\Core;
 
-use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
 use Safi\Core\Contracts\RouterInterface;
 use Safi\Core\Contracts\ViewEngineInterface;
@@ -29,23 +28,23 @@ final class Kernel
 {
     public const string VERSION = '0.1.15';
 
-    /** @var array<int, class-string<MiddlewareInterface>|callable|MiddlewareInterface> */
+    /** @var array<int, callable|MiddlewareInterface> */
     private array $middlewares;
 
     /**
-     * @param array<int, class-string<MiddlewareInterface>|callable|MiddlewareInterface> $middlewares
+     * @param array<int, callable|MiddlewareInterface> $middlewares
      */
     public function __construct(
-        private readonly ContainerInterface $container,
         private readonly RouterInterface $router,
         private readonly LoggerInterface $logger,
+        private readonly ?ViewEngineInterface $view = null,
         array $middlewares = [],
     ) {
         $this->middlewares = $middlewares;
     }
 
     /**
-     * @return array<int, class-string<MiddlewareInterface>|callable|MiddlewareInterface>
+     * @return array<int, callable|MiddlewareInterface>
      */
     public function getMiddlewares(): array
     {
@@ -61,7 +60,6 @@ final class Kernel
 
         try {
             $pipeline = new MiddlewarePipeline(
-                $this->container,
                 fn(Context $ctx): Response => $this->router->dispatch($ctx->request),
             );
 
@@ -101,12 +99,10 @@ final class Kernel
 
         $isAdmin = str_starts_with($request->getUri(), '/admin');
 
-        if ($this->container->has(ViewEngineInterface::class)) {
+        if ($this->view instanceof ViewEngineInterface) {
             try {
-                /** @var ViewEngineInterface $view */
-                $view = $this->container->get(ViewEngineInterface::class);
                 $template = $isAdmin ? 'errors/admin_error.twig' : 'errors/error.twig';
-                $html = $view->render($template, [
+                $html = $this->view->render($template, [
                     'code' => $code,
                     'title' => $title,
                     'message' => $message,
