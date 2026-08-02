@@ -101,7 +101,7 @@ final class Kernel
 
         if ($this->view instanceof ViewEngineInterface) {
             try {
-                $template = $isAdmin ? 'errors/admin_error.twig' : 'errors/error.twig';
+                $template = $isAdmin ? 'errors/admin_error' : 'errors/error';
                 $html = $this->view->render($template, [
                     'code' => $code,
                     'title' => $title,

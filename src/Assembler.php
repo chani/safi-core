@@ -124,10 +124,8 @@ final class Assembler implements ContainerInterface, ContainerRegistrarInterface
             return $instance;
         }
 
-        $parameters = $constructor->getParameters();
         $dependencies = [];
-
-        foreach ($parameters as $parameter) {
+        foreach ($constructor->getParameters() as $parameter) {
             $type = $parameter->getType();
 
             if ($type instanceof \ReflectionUnionType || $type instanceof \ReflectionIntersectionType) {
@@ -135,18 +133,17 @@ final class Assembler implements ContainerInterface, ContainerRegistrarInterface
                     $dependencies[] = $parameter->getDefaultValue();
                     continue;
                 }
-                throw new RuntimeException("Union or Intersection types are not supported for autowiring parameter '{$parameter->getName()}' in class {$class}.");
+                throw new RuntimeException("Union/Intersection types not supported for '{$parameter->getName()}' in {$class}.");
             }
 
             if ($type instanceof ReflectionNamedType) {
                 $typeName = $type->getName();
-
                 if ($type->isBuiltin()) {
                     if ($parameter->isDefaultValueAvailable()) {
                         $dependencies[] = $parameter->getDefaultValue();
                         continue;
                     }
-                    throw new RuntimeException("Cannot autowire built-in type '{$typeName}' for parameter '{$parameter->getName()}' in class {$class}.");
+                    throw new RuntimeException("Cannot autowire built-in type '{$typeName}' for '{$parameter->getName()}' in {$class}.");
                 }
 
                 if (interface_exists($typeName) && !$this->hasService($typeName) && isset($this->interfaceMap[$typeName])) {
@@ -162,7 +159,7 @@ final class Assembler implements ContainerInterface, ContainerRegistrarInterface
                 continue;
             }
 
-            throw new RuntimeException("Cannot resolve parameter '{$parameter->getName()}' in class {$class}.");
+            throw new RuntimeException("Cannot resolve parameter '{$parameter->getName()}' in {$class}.");
         }
 
         $instance = $reflectionClass->newInstanceArgs($dependencies);

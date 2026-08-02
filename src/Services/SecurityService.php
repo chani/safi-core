@@ -1,12 +1,5 @@
 <?php
 
-/**
- * Safi Microframework - safi-core
- * @author Jean Bruenn
- * @copyright 2026 All Rights Reserved
- * @see https://github.com/chani/safi-core
- */
-
 declare(strict_types=1);
 
 namespace Safi\Core\Services;
@@ -18,11 +11,16 @@ final class SecurityService
     private string $csrfToken = '';
 
     /**
+     * ARCHITECTURE GUARD: $session MUST remain a lazy callable (or null) at instantiation.
+     * Eagerly resolving SessionServiceInterface inside SecurityService constructor causes a circular dependency deadlock
+     * with SessionService during Container bootstrapping. DO NOT eagerly inject SessionServiceInterface here.
+     *
      * @param array<string, mixed> $config
      */
     public function __construct(
         private readonly LoggerInterface $logger,
         private readonly array $config = [],
+        private readonly mixed $session = null,
     ) {}
 
     public function getClientIp(): string
@@ -30,11 +28,10 @@ final class SecurityService
         $rawRemote = $_SERVER['REMOTE_ADDR'] ?? null;
         $remoteAddr = is_string($rawRemote) ? $rawRemote : '127.0.0.1';
 
-        /** @var list<string> $trustedProxies */
         $trustedProxies = is_array($this->config['trusted_proxies'] ?? null) ? $this->config['trusted_proxies'] : [];
 
         foreach ($trustedProxies as $proxy) {
-            if ($this->checkIpInCidr($remoteAddr, $proxy)) {
+            if (is_string($proxy) && $this->checkIpInCidr($remoteAddr, $proxy)) {
                 return $this->resolveProxyIp($remoteAddr);
             }
         }
@@ -53,18 +50,27 @@ final class SecurityService
             return $this->csrfToken;
         }
 
-        if (session_status() !== PHP_SESSION_ACTIVE && session_status() !== PHP_SESSION_DISABLED) {
-            @session_start();
-        }
+        $sessionObj = is_callable($this->session) ? ($this->session)() : $this->session;
 
-        if (isset($_SESSION['csrf_token']) && is_string($_SESSION['csrf_token']) && $_SESSION['csrf_token'] !== '') {
+        if (is_object($sessionObj) && method_exists($sessionObj, 'get')) {
+            $sessToken = $sessionObj->get('csrf_token');
+            if (is_string($sessToken) && $sessToken !== '') {
+                $this->csrfToken = $sessToken;
+                return $this->csrfToken;
+            }
+        } elseif (isset($_SESSION['csrf_token']) && is_string($_SESSION['csrf_token']) && $_SESSION['csrf_token'] !== '') {
             $this->csrfToken = $_SESSION['csrf_token'];
             return $this->csrfToken;
         }
 
         $token = bin2hex(random_bytes(32));
         $this->csrfToken = $token;
-        $_SESSION['csrf_token'] = $token;
+
+        if (is_object($sessionObj) && method_exists($sessionObj, 'set')) {
+            $sessionObj->set('csrf_token', $token);
+        } elseif (session_status() === PHP_SESSION_ACTIVE) {
+            $_SESSION['csrf_token'] = $token;
+        }
 
         return $token;
     }

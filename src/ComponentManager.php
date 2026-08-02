@@ -1,12 +1,5 @@
 <?php
 
-/**
- * Safi Microframework - safi-core
- * @author Jean Bruenn
- * @copyright 2026 All Rights Reserved
- * @see https://github.com/chani/safi-core
- */
-
 declare(strict_types=1);
 
 namespace Safi\Core;
@@ -30,7 +23,7 @@ use Throwable;
 
 final class ComponentManager
 {
-    /** @var array<string, object> */
+    /** @var array<string, ServiceProviderInterface> */
     private array $loadedComponents = [];
 
     public function __construct(
@@ -65,43 +58,10 @@ final class ComponentManager
 
     public function registerAttributeRoutes(RouterInterface $router, string $directory): void
     {
-        if (!is_dir($directory)) {
-            return;
-        }
-
-        $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($directory));
-        $regex = new RegexIterator($iterator, '/\.php$/i');
-
-        /** @var mixed $file */
-        foreach ($regex as $file) {
-            if (!$file instanceof SplFileInfo) {
-                continue;
-            }
-
-            $filePath = $file->getPathname();
-
-            $relativePath = substr($filePath, strlen($directory));
-            if (str_contains($relativePath, DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR)) {
-                continue;
-            }
-
-            $content = file_get_contents($filePath);
-            if ($content === false) {
-                continue;
-            }
-
-            $className = ClassFinder::extractClassName($content);
-            if (!$className) {
-                continue;
-            }
-            if (!class_exists($className)) {
-                continue;
-            }
-
+        foreach ($this->findPhpClasses($directory) as $className) {
             $reflect = new ReflectionClass($className);
             foreach ($reflect->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
-                $attributes = $method->getAttributes(Route::class);
-                foreach ($attributes as $attribute) {
+                foreach ($method->getAttributes(Route::class) as $attribute) {
                     $route = $attribute->newInstance();
                     if ($route instanceof Route) {
                         $router->addRoute(
@@ -129,9 +89,7 @@ final class ComponentManager
                 }
 
                 $provider->boot($this->container);
-
-                $providerClass = $provider::class;
-                $this->loadedComponents[$providerClass] = $provider;
+                $this->loadedComponents[$provider::class] = $provider;
             } catch (Throwable $e) {
                 $this->logger->error("Failed to boot service provider " . $provider::class . ": " . $e->getMessage());
             }
@@ -139,47 +97,15 @@ final class ComponentManager
     }
 
     /**
-     * @param array<int, array{name: string, dir: string}> $componentData
-     * @return array<string, string>
+     * @param array<int, array{dir: string}> $componentData
+     * @return array<string, class-string>
      */
     public function buildInterfaceMap(array $componentData): array
     {
         $interfaceMap = [];
         foreach ($componentData as $comp) {
             $compDir = $comp['dir'];
-            if (!is_dir($compDir)) {
-                continue;
-            }
-
-            $directoryIterator = new RecursiveDirectoryIterator($compDir);
-            $iterator = new RecursiveIteratorIterator($directoryIterator);
-            $regex = new RegexIterator($iterator, '/\.php$/i');
-
-            /** @var mixed $file */
-            foreach ($regex as $file) {
-                if (!$file instanceof SplFileInfo) {
-                    continue;
-                }
-
-                $filePath = $file->getPathname();
-                $relativePath = substr($filePath, strlen($compDir));
-                if (str_contains($relativePath, DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR)) {
-                    continue;
-                }
-
-                $content = file_get_contents($filePath);
-                if ($content === false) {
-                    continue;
-                }
-
-                $className = ClassFinder::extractClassName($content);
-                if (!$className) {
-                    continue;
-                }
-                if (!class_exists($className)) {
-                    continue;
-                }
-
+            foreach ($this->findPhpClasses($compDir) as $className) {
                 $reflect = new ReflectionClass($className);
                 foreach ($reflect->getInterfaceNames() as $interfaceName) {
                     if (isset($interfaceMap[$interfaceName]) && $interfaceMap[$interfaceName] !== $className) {
@@ -196,10 +122,50 @@ final class ComponentManager
     }
 
     /**
-     * @return array<string, object>
+     * @return array<string, ServiceProviderInterface>
      */
     public function getLoadedComponents(): array
     {
         return $this->loadedComponents;
+    }
+
+    /**
+     * Reusable directory scanner extracting valid FQCNs.
+     *
+     * @return array<int, class-string>
+     */
+    private function findPhpClasses(string $directory): array
+    {
+        if (!is_dir($directory)) {
+            return [];
+        }
+
+        $classes = [];
+        $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($directory));
+        $regex = new RegexIterator($iterator, '/\.php$/i');
+
+        foreach ($regex as $file) {
+            if (!$file instanceof SplFileInfo) {
+                continue;
+            }
+
+            $filePath = $file->getPathname();
+            $relativePath = substr($filePath, strlen($directory));
+            if (str_contains($relativePath, DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR)) {
+                continue;
+            }
+
+            $content = file_get_contents($filePath);
+            if ($content === false) {
+                continue;
+            }
+
+            $className = ClassFinder::extractClassName($content);
+            if ($className !== null && class_exists($className)) {
+                $classes[] = $className;
+            }
+        }
+
+        return $classes;
     }
 }
